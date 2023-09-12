@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Set Slack webhook URL and channel
+SLACK_WEBHOOK_URL="https://hooks.slack.com/services/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"
+SLACK_CHANNEL="#fyp"
+
+# Send notification when Suricata starts
+curl -s -X POST -H 'Content-type: application/json' --data "{\"text\":\"Suricata started\"}" "$SLACK_WEBHOOK_URL"
+
+# Follow the Suricata fast.log file in real-time and send alerts to Slack
+tail -f /var/log/suricata/fast.log | while read line
+do
+  # Parse Suricata log line
+  timestamp=$(echo "$line" | awk -F'[. ]' '{print $1 " " $2}')
+  alert=$(echo "$line" | awk -F'[]]' '{print $3}')
+  src_ip=$(echo "$line" | awk -F'[ :]' '{print $12}')
+  src_port=$(echo "$line" | awk -F'[ :]' '{print $13}')
+  dest_ip=$(echo "$line" | awk -F'[ :]' '{print $15}')
+  dest_port=$(echo "$line" | awk -F'[ :]' '{print $16}')
+  protocol=$(echo "$line" | awk -F'[{}]' '{print $2}')
+
+  # Build Slack message payload
+  payload="{
+    \"channel\": \"$SLACK_CHANNEL\",
+    \"text\": \"Suricata alert triggered: $alert\",
+    \"attachments\": [
+      {
+        \"fallback\": \"Suricata alert triggered: $alert\",
+        \"color\": \"danger\",
+        \"fields\": [
+          {
+            \"title\": \"Timestamp\",
+            \"value\": \"$timestamp\",
+            \"short\": true
+          },
+          {
+            \"title\": \"Source IP\",
+            \"value\": \"$src_ip\",
+            \"short\": true
+          },
+          {
+            \"title\": \"Destination IP\",
+            \"value\": \"$dest_ip\",
+            \"short\": true
+          },
+          {
+            \"title\": \"Protocol\",
+            \"value\": \"$protocol\",
+            \"short\": true
+          },
+          {
+            \"title\": \"Source Port\",
+            \"value\": \"$src_port\",
+            \"short\": true
+          },
+          {
+            \"title\": \"Destination Port\",
+            \"value\": \"$dest_port\",
+            \"short\": true
+          }
+        ]
+      }
+    ]
+  }"
+
+  # Send Slack message via webhook
+  curl -s -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL"
+done
+
+# Send notification when Suricata stops
+curl -s -X POST -H 'Content-type: application/json' --data "{\"text\":\"Suricata stopped\"}" "$SLACK_WEBHOOK_URL"
+
